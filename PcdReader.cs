@@ -1,15 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
 
+// PCD file format: https://pcl.readthedocs.io/projects/tutorials/en/master/pcd_file_format.html#pcd-file-format
 class PcdReader
 {
     Header header;
     List<Point3D> point3Ds;
     int pointCount = 0;
+
+    public int FileSizeBytes { get; private set; }
+
+    public int PointCount => pointCount;
+
+    public IEnumerable<Point3D> Points => point3Ds;
 
     /// <summary>
     /// 获取头部信息
@@ -26,7 +29,7 @@ class PcdReader
         Regex reg_WIDTH = new Regex("WIDTH .*");
         Regex reg_HEIGHT = new Regex("HEIGHT .*");
         Regex reg_VIEWPOINT = new Regex("VIEWPOINT .*");
-        Regex reg_POINTS = new Regex("POINTS .*");  //点的数量
+        Regex reg_POINTS = new Regex("POINTS .*");  // Number of points
         Regex reg_DATA = new Regex("DATA .*");  //数据类型
 
         Match m_VERSION = reg_VERSION.Match(s);
@@ -65,16 +68,17 @@ class PcdReader
     /// <summary>
     /// 读取 binary 和 binary_compressed 格式的 pcd 文件
     /// </summary>
-    private void ReadPcdFile(string path)
+    public void ReadPcdFile(string path)
     {
         byte[] bytes = File.ReadAllBytes(path);  //读取文件到字节数组
+        FileSizeBytes = bytes.Length;
         string text = Encoding.UTF8.GetString(bytes);  //转为文本，方便分离文件头部信息
 
         GetHeader(text);
 
         string dataType = header.DATA.Split(' ')[1];  //储存的数据类型，ascii binary binary_compressed
 
-        int size = header.SIZE.Split(' ').Length - 1;  //SIZE的长度，可以判断是否包含rgb信息
+        int size = header.SIZE.Split(' ').Length - 1;  // The length of SIZE, you can judge whether it contains rgb information
 
         pointCount = Convert.ToInt32(header.POINTS.Split(' ')[1]);  //点的数量
         int index = text.IndexOf(header.DATA) + header.DATA.Length + 1;  //数据开始的索引
@@ -82,16 +86,20 @@ class PcdReader
         Point3D point;
         if (dataType == "binary")
         {
+            var fields = header.FIELDS.Split(' ').Skip(1).ToList();
+            var colorFieldIndex = fields.IndexOf("rgb");
+            var xFieldIndex = fields.IndexOf("x");
+
             //二进制文件，直接按字节数组读取即可
             for (int i = index; i < bytes.Length;)
             {
                 point = new Point3D();
-                point.x = BitConverter.ToSingle(bytes, i);
-                point.y = BitConverter.ToSingle(bytes, i + 4);
-                point.z = BitConverter.ToSingle(bytes, i + 8);
-                if (size == 4)
+                point.x = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex));
+                point.y = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex) + 4);
+                point.z = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex) + 8);
+                if (colorFieldIndex >= 0)
                 {
-                    point.color = BitConverter.ToUInt32(bytes, i + 12);
+                    point.color = BitConverter.ToUInt32(bytes, i + (4 * colorFieldIndex));
                 }
                 point3Ds.Add(point);
                 if (point3Ds.Count == pointCount) break;
@@ -226,6 +234,9 @@ class Header
     public string FistLine = "";  //pcd 文件的第一行
     public string VERSION;
     public string FIELDS;
+    /// <summary>
+    /// Size of each dimension (<see cref="FIELDS"/>) in bytes.
+    /// </summary>
     public string SIZE;
     public string TYPE;
     public string COUNT;
