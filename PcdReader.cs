@@ -14,6 +14,10 @@ class PcdReader
 
     public IEnumerable<Point3D> Points => point3Ds;
 
+    public (string x, string y, string z) ViewpointTranslation { get; private set; }
+
+    public (string w, string x, string y, string z) ViewpointQuaternion { get; private set; }
+
     /// <summary>
     /// 获取头部信息
     /// </summary>
@@ -57,6 +61,16 @@ class PcdReader
 
         Match m_VIEWPOINT = reg_VIEWPOINT.Match(s);
         header.VIEWPOINT = m_VIEWPOINT.Value;
+        var viewpointParts = header.VIEWPOINT.Split(' ').Skip(1);
+        ViewpointTranslation = (
+            viewpointParts.ElementAt(0),
+            viewpointParts.ElementAt(1),
+            viewpointParts.ElementAt(2));
+        ViewpointQuaternion = (
+            viewpointParts.ElementAt(3),
+            viewpointParts.ElementAt(4),
+            viewpointParts.ElementAt(5),
+            viewpointParts.ElementAt(6));
 
         Match m_POINTS = reg_POINTS.Match(s);
         header.POINTS = m_POINTS.Value;
@@ -242,6 +256,10 @@ class Header
     public string COUNT;
     public string WIDTH;
     public string HEIGHT;
+    /// <summary>
+    /// An acquisition viewpoint for the points in the dataset, 
+    /// specified as a translation (tx ty tz) + quaternion (qw qx qy qz).
+    /// </summary>
     public string VIEWPOINT;
     public string POINTS;
     public string DATA;
