@@ -90,86 +90,101 @@ class PcdReader
 
         GetHeader(text);
 
-        string dataType = header.DATA.Split(' ')[1];  //储存的数据类型，ascii binary binary_compressed
+        string dataType = header.DATA.Split(' ')[1].TrimEnd();  //储存的数据类型，ascii binary binary_compressed
 
         int size = header.SIZE.Split(' ').Length - 1;  // The length of SIZE, you can judge whether it contains rgb information
 
         pointCount = Convert.ToInt32(header.POINTS.Split(' ')[1]);  //点的数量
         int index = text.IndexOf(header.DATA) + header.DATA.Length + 1;  //数据开始的索引
         point3Ds = new List<Point3D>();
-        Point3D point;
-        if (dataType == "binary")
-        {
-            var fields = header.FIELDS.Split(' ').Skip(1).ToList();
-            var colorFieldIndex = fields.IndexOf("rgb");
-            var xFieldIndex = fields.IndexOf("x");
 
-            //二进制文件，直接按字节数组读取即可
-            for (int i = index; i < bytes.Length;)
+        switch (dataType)
+        {
+            case "binary":
+                ReadBinaryData(bytes, size, index);
+                break;
+            case "binary_compressed":
+                ReadBinaryCompressedData(bytes, size, index);
+                break;
+            case "ascii":
+                throw new NotImplementedException("Sorry, ASCII data type is not currently supported.");
+            default:
+                break;
+        }
+    }
+
+    private void ReadBinaryCompressedData(byte[] bytes, int size, int index)
+    {
+        Point3D point;
+        //二进制压缩，先解析压缩前的数据量和压缩后数据量
+        int[] bys = new int[2];
+        int dataIndex = 0;
+        for (int i = 0; i < bys.Length; i++)
+        {
+            bys[i] = BitConverter.ToInt32(bytes, index + i * 4);
+            dataIndex = index + i * 4;
+        }
+        dataIndex += 4;  //数据开始的索引
+        int compressedSize = bys[0];  //压缩之后的长度
+        int decompressedSize = bys[1];  //解压之后的长度
+
+        //将压缩后的数据单独拿出来
+        byte[] compress = new byte[compressedSize];
+        //将bs，从索引为a开始，复制到compress的[0至compressedSize]区间内
+        Array.Copy(bytes, dataIndex, compress, 0, compressedSize);
+
+        //LZF解压算法
+        byte[] data = Decompress(compress, decompressedSize);
+        int type = 0;
+        for (int i = 0; i < data.Length; i += 4)
+        {
+            //先读取x坐标
+            if (type == 0)
             {
                 point = new Point3D();
-                point.x = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex));
-                point.y = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex) + 4);
-                point.z = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex) + 8);
-                if (colorFieldIndex >= 0)
-                {
-                    point.color = BitConverter.ToUInt32(bytes, i + (4 * colorFieldIndex));
-                }
+                point.x = BitConverter.ToSingle(data, i);
                 point3Ds.Add(point);
-                if (point3Ds.Count == pointCount) break;
-                i += 4 * size;
+                if (point3Ds.Count == pointCount) type++;
+            }
+            else if (type == 1)  //y 坐标
+            {
+                point3Ds[i / 4 - pointCount].y = BitConverter.ToSingle(data, i);
+                if (i / 4 == pointCount * 2 - 1) type++;
+            }
+            else if (type == 2)   //z 坐标
+            {
+                point3Ds[i / 4 - pointCount * 2].z = BitConverter.ToSingle(data, i);
+                if (i / 4 == pointCount * 3 - 1) type++;
+            }
+            else if (size == 4)  //颜色信息
+            {
+                point3Ds[i / 4 - pointCount * 3].color = BitConverter.ToUInt32(data, i);
+                if (i / 4 == pointCount * 4 - 1) break;
             }
         }
-        else if(dataType == "binary_compressed")
+    }
+
+    private void ReadBinaryData(byte[] bytes, int size, int index)
+    {
+        var fields = header.FIELDS.Split(' ').Skip(1).ToList();
+        var colorFieldIndex = fields.IndexOf("rgb");
+        var xFieldIndex = fields.IndexOf("x");
+        Point3D point;
+        //二进制文件，直接按字节数组读取即可
+        for (int i = index; i < bytes.Length;)
         {
-            //二进制压缩，先解析压缩前的数据量和压缩后数据量
-            int[] bys = new int[2];
-            int dataIndex = 0;
-            for (int i = 0; i < bys.Length; i++)
+            point = new Point3D();
+            point.x = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex));
+            point.y = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex) + 4);
+            point.z = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex) + 8);
+            if (colorFieldIndex >= 0)
             {
-                bys[i] = BitConverter.ToInt32(bytes, index + i * 4);
-                dataIndex = index + i * 4;
+                point.color = BitConverter.ToUInt32(bytes, i + (4 * colorFieldIndex));
             }
-            dataIndex += 4;  //数据开始的索引
-            int compressedSize = bys[0];  //压缩之后的长度
-            int decompressedSize = bys[1];  //解压之后的长度
-
-            //将压缩后的数据单独拿出来
-            byte[] compress = new byte[compressedSize];
-            //将bs，从索引为a开始，复制到compress的[0至compressedSize]区间内
-            Array.Copy(bytes, dataIndex, compress, 0, compressedSize);
-
-            //LZF解压算法
-            byte[] data = Decompress(compress, decompressedSize);
-            int type = 0;
-            for (int i = 0; i < data.Length; i += 4)
-            {
-                //先读取x坐标
-                if (type == 0)
-                {
-                    point = new Point3D();
-                    point.x = BitConverter.ToSingle(data, i);
-                    point3Ds.Add(point);
-                    if (point3Ds.Count == pointCount) type++;
-                }
-                else if (type == 1)  //y 坐标
-                {
-                    point3Ds[i / 4 - pointCount].y = BitConverter.ToSingle(data, i);
-                    if (i / 4 == pointCount * 2 - 1) type++;
-                }
-                else if (type == 2)   //z 坐标
-                {
-                    point3Ds[i / 4 - pointCount * 2].z = BitConverter.ToSingle(data, i);
-                    if (i / 4 == pointCount * 3 - 1) type++;
-                }
-                else if (size == 4)  //颜色信息
-                {
-                    point3Ds[i / 4 - pointCount * 3].color = BitConverter.ToUInt32(data, i);
-                    if (i / 4 == pointCount * 4 - 1) break;
-                }
-            }
+            point3Ds.Add(point);
+            if (point3Ds.Count == pointCount) break;
+            i += 4 * size;
         }
-
     }
 
     /// <summary>
