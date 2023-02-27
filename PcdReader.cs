@@ -253,6 +253,7 @@ class Point3D
     public float y;
     public float z;
     public uint color;
+    public Dictionary<string, object>? restOfFields;
 }
 
 /// <summary>
