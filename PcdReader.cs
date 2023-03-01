@@ -92,8 +92,12 @@ class PcdReader
 
         string dataType = header.DATA.Split(' ')[1].TrimEnd();  //储存的数据类型，ascii binary binary_compressed
 
-        int size = header.SIZE.Split(' ').Length - 1;  // The length of SIZE, you can judge whether it contains rgb information
-
+        var sizes = header.SIZE
+            .Split(' ')
+            .Skip(1)
+            .Select(item => int.Parse(item));
+        var rowSizeBytes = sizes
+            .Sum();
         pointCount = Convert.ToInt32(header.POINTS.Split(' ')[1]);  //点的数量
         int index = text.IndexOf(header.DATA) + header.DATA.Length + 1;  //数据开始的索引
         point3Ds = new List<Point3D>();
@@ -101,10 +105,10 @@ class PcdReader
         switch (dataType)
         {
             case "binary":
-                ReadBinaryData(bytes, size, index);
+                ReadBinaryData(bytes, rowSizeBytes, index, sizes);
                 break;
             case "binary_compressed":
-                ReadBinaryCompressedData(bytes, size, index);
+                ReadBinaryCompressedData(bytes, rowSizeBytes, index);
                 break;
             case "ascii":
                 throw new NotImplementedException("Sorry, ASCII data type is not currently supported.");
@@ -113,7 +117,7 @@ class PcdReader
         }
     }
 
-    private void ReadBinaryCompressedData(byte[] bytes, int size, int index)
+    private void ReadBinaryCompressedData(byte[] bytes, int rowSizeBytes, int index)
     {
         Point3D point;
         //二进制压缩，先解析压缩前的数据量和压缩后数据量
@@ -156,7 +160,7 @@ class PcdReader
                 point3Ds[i / 4 - pointCount * 2].z = BitConverter.ToSingle(data, i);
                 if (i / 4 == pointCount * 3 - 1) type++;
             }
-            else if (size == 4)  //颜色信息
+            else if (rowSizeBytes == 4)  //颜色信息
             {
                 point3Ds[i / 4 - pointCount * 3].color = BitConverter.ToUInt32(data, i);
                 if (i / 4 == pointCount * 4 - 1) break;
@@ -164,13 +168,18 @@ class PcdReader
         }
     }
 
-    private void ReadBinaryData(byte[] bytes, int size, int index)
+    private void ReadBinaryData(byte[] bytes, int rowSizeBytes, int index, IEnumerable<int> sizes)
     {
-        var fields = header.FIELDS.Split(' ').Skip(1).ToList();
+        var fields = header.FIELDS
+            .Split(' ')
+            .Skip(1)
+            .Select(item => item.TrimEnd())
+            .ToList();
         var colorFieldIndex = fields.IndexOf("rgb");
         var xFieldIndex = fields.IndexOf("x");
+        var restOfFields = fields.Except(new string[] { "x", "y", "z", "rgb" });
         Point3D point;
-        //二进制文件，直接按字节数组读取即可
+        
         for (int i = index; i < bytes.Length;)
         {
             point = new Point3D();
@@ -181,10 +190,27 @@ class PcdReader
             {
                 point.color = BitConverter.ToUInt32(bytes, i + (4 * colorFieldIndex));
             }
+
+            if (restOfFields.Any())
+            { 
+                var otherField = restOfFields.First();
+                point.restOfFields = new Dictionary<string, object>(restOfFields.Count());
+                var offset = GetFieldOffset(otherField, fields, sizes);
+                point.restOfFields[otherField] = bytes[i + offset];
+            }
+
             point3Ds.Add(point);
             if (point3Ds.Count == pointCount) break;
-            i += 4 * size;
+            i += rowSizeBytes;
         }
+    }
+
+    private int GetFieldOffset(string field, IList<string> fields, IEnumerable<int> sizes)
+    {
+        var fieldIndex = fields.IndexOf(field);
+        var offset = sizes.Take(fieldIndex).Sum();
+
+        return offset;
     }
 
     /// <summary>
