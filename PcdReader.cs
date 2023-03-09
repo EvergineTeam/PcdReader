@@ -96,8 +96,13 @@ class PcdReader
             .Split(' ')
             .Skip(1)
             .Select(item => int.Parse(item));
+        var counts = header.COUNT
+            .Split(' ')
+            .Skip(1)
+            .Select(item => int.Parse(item));
         var rowSizeBytes = sizes
-            .Sum();
+            .Zip(counts)
+            .Sum(item => item.First * item.Second);
         pointCount = Convert.ToInt32(header.POINTS.Split(' ')[1]);  //点的数量
         int index = text.IndexOf(header.DATA) + header.DATA.Length + 1;  //数据开始的索引
         point3Ds = new List<Point3D>();
@@ -196,6 +201,7 @@ class PcdReader
                 var otherField = restOfFields.First();
                 point.restOfFields = new Dictionary<string, object>(restOfFields.Count());
                 var offset = GetFieldOffset(otherField, fields, sizes);
+                // TODO support types appart from byte
                 point.restOfFields[otherField] = bytes[i + offset];
             }
 
