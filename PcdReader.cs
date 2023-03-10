@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Buffers.Binary;
+using System.Text;
 using System.Text.RegularExpressions;
 
 // PCD file format: https://pcl.readthedocs.io/projects/tutorials/en/master/pcd_file_format.html#pcd-file-format
@@ -194,6 +195,12 @@ class PcdReader
             if (colorFieldIndex >= 0)
             {
                 point.color = BitConverter.ToUInt32(bytes, i + (4 * colorFieldIndex));
+
+                if (BitConverter.IsLittleEndian)
+                {
+                    var rgba = BinaryPrimitives.ReverseEndianness(point.color);
+                    point.color = rgba >> 8;
+                }
             }
 
             if (restOfFields.Any())
