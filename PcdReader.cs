@@ -167,7 +167,7 @@ class PcdReader
             }
             else if (rowSizeBytes == 4)  //颜色信息
             {
-                point3Ds[i / 4 - pointCount * 3].color = BitConverter.ToUInt32(data, i);
+                point3Ds[i / 4 - pointCount * 3].colorRGB = BitConverter.ToUInt32(data, i);
                 if (i / 4 == pointCount * 4 - 1) break;
             }
         }
@@ -193,7 +193,7 @@ class PcdReader
             point.z = BitConverter.ToSingle(bytes, i + (4 * xFieldIndex) + 8);
             if (colorFieldIndex >= 0)
             {
-                point.color = BitConverter.ToUInt32(bytes, i + (4 * colorFieldIndex));
+                point.colorRGB = BitConverter.ToUInt32(bytes, i + (4 * colorFieldIndex));
             }
 
             if (restOfFields.Any())
@@ -284,7 +284,7 @@ class Point3D
     public float x;
     public float y;
     public float z;
-    public uint color;
+    public uint colorRGB;
     public Dictionary<string, object>? restOfFields;
 }
 
