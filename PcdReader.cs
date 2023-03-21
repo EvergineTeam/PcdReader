@@ -196,13 +196,11 @@ class PcdReader
                 point.colorRGB = BitConverter.ToUInt32(bytes, i + (4 * colorFieldIndex));
             }
 
-            if (restOfFields.Any())
+            if (restOfFields.Contains("label"))
             { 
-                var otherField = restOfFields.First();
-                point.restOfFields = new Dictionary<string, object>(restOfFields.Count());
-                var offset = GetFieldOffset(otherField, fields, sizes);
+                var offset = GetFieldOffset("label", fields, sizes);
                 // TODO support types appart from byte
-                point.restOfFields[otherField] = bytes[i + offset];
+                point.label = bytes[i + offset];
             }
 
             point3Ds.Add(point);
@@ -285,7 +283,7 @@ class Point3D
     public float y;
     public float z;
     public uint colorRGB;
-    public Dictionary<string, object>? restOfFields;
+    public byte label;
 }
 
 /// <summary>
