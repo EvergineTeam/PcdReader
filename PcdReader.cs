@@ -56,14 +56,13 @@ class PcdReader
     private void ReadHeader(string fileName, out long dataBytesIndex)
     {
         var headerLines = new string[10];
+        var newLineLengthBytes = LineBreakLengthBytes(fileName);
 
         using (var textReader = new StreamReader(fileName))
         {
             string? line;
             var headerLinesIndex = 0;
             dataBytesIndex = 0;
-            // We understand \n (1 B) is always used; however, \r\n (2 B) could appear too
-            const int newLineBytesLength = 1;
 
             do
             {
@@ -74,7 +73,7 @@ class PcdReader
                     throw new ArgumentException("PCD is not well-formed.");
                 }
 
-                dataBytesIndex += line.Length + newLineBytesLength;
+                dataBytesIndex += line.Length + newLineLengthBytes;
 
                 if (line.StartsWith('#'))
                 {
@@ -86,8 +85,40 @@ class PcdReader
             }
             while (!line.StartsWith("DATA"));
         }
-        
+
         header = new Header(headerLines);
+    }
+
+    private static int LineBreakLengthBytes(string fileName)
+    {
+        // We estimate \n (1 B) is by default; however, \r\n (2 B) could appear too
+        int newLineBytesLength = 1;
+        int peek;
+        using var textReader = new StreamReader(fileName);
+
+        while ((peek = textReader.Read()) >= 0)
+        {
+            var @char = (char)peek;
+
+            if (@char == '\r')
+            {
+                peek = textReader.Read();
+                @char = (char)peek;
+
+                if (@char == '\n')
+                {
+                    newLineBytesLength = 2;
+                    break;
+                }
+            }
+            else if (@char == '\n')
+            {
+                newLineBytesLength = 1;
+                break;
+            }
+        }
+
+        return newLineBytesLength;
     }
 
     private void ReadBinaryCompressedData(byte[] bytes, int rowSizeBytes, int index)
