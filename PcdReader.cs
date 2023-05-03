@@ -1,4 +1,7 @@
 ﻿// PCD file format: https://pcl.readthedocs.io/projects/tutorials/en/master/pcd_file_format.html#pcd-file-format
+using System.Buffers;
+using System.Runtime.CompilerServices;
+
 class PcdReader
 {
     private Header header;
@@ -7,18 +10,23 @@ class PcdReader
 
     private int pointCount = 0;
 
-    public int FileSizeBytes { get; private set; }
+    public long FileSizeBytes { get; private set; }
 
     public int PointCount => pointCount;
 
-    public IEnumerable<Point3D> Points => points;
+    public Point3D[] Points => points;
 
     public Header Header => header;
 
+    private const int MaxHeaderSize = 1024; // 1K
+
     public void ReadPcdFile(string fileName)
     {
-        byte[] bytes = File.ReadAllBytes(fileName);  //读取文件到字节数组
-        FileSizeBytes = bytes.Length;
+        FileInfo fileInfo= new FileInfo(fileName);
+        FileSizeBytes = fileInfo.Length;
+
+        BinaryReader binaryReader = new BinaryReader(File.OpenRead(fileName));
+        byte[] bytes = binaryReader.ReadBytes(MaxHeaderSize);
 
         ReadHeader(fileName, out var dataBytesIndex);
 
@@ -41,7 +49,7 @@ class PcdReader
         switch (dataType)
         {
             case "binary":
-                ReadBinaryData(bytes, rowSizeBytes, (int)dataBytesIndex, sizes);
+                ReadBinaryData(fileName, bytes, rowSizeBytes, (int)dataBytesIndex, sizes);
                 break;
             case "binary_compressed":
                 ReadBinaryCompressedData(bytes, rowSizeBytes, (int)dataBytesIndex);
@@ -186,7 +194,7 @@ class PcdReader
         }
     }
 
-    private void ReadBinaryData(byte[] bytes, int rowSizeBytes, int index, IEnumerable<int> sizes)
+    private void ReadBinaryData(string fileName, byte[] bytes, int rowSizeBytes, int index, IEnumerable<int> sizes)
     {
         var fields = header.fields
             .Split(' ')
@@ -200,33 +208,55 @@ class PcdReader
         var isLabelAvailable = restOfFields.Contains("label");
         var labelOffset = GetFieldOffset("label", fields, sizes);
         var pointIndex = 0;
-        
-        for (int i = index; i < bytes.Length;)
+
+
+        int pointsToRead = 100000;
+
+        BinaryReader binaryReader = new BinaryReader(File.OpenRead(fileName));
+        binaryReader.BaseStream.Seek(index, SeekOrigin.Begin);
+
+        ////byte[] = new byte[rowSizeBytes * pointsToRead];
+
+        int remainingPoints = this.pointCount;
+
+        do
         {
-            ref var point = ref points[pointIndex];
-            point.x = BitConverter.ToSingle(bytes, i + xFieldOffset);
-            point.y = BitConverter.ToSingle(bytes, i + xFieldOffset + 4);
-            point.z = BitConverter.ToSingle(bytes, i + xFieldOffset + 8);
-            
-            if (colorFieldIndex >= 0)
+            var loadPoints = Math.Min(pointsToRead, remainingPoints);
+            int loadBufferSize = rowSizeBytes * loadPoints;
+            remainingPoints -= loadPoints;
+
+            bytes = binaryReader.ReadBytes(loadBufferSize);
+
+            for (int byteId = 0; byteId < bytes.Length;)
             {
-                point.colorRGB = BitConverter.ToUInt32(bytes, i + (4 * colorFieldIndex));
+                ref var point = ref points[pointIndex];
+                point.x = BitConverter.ToSingle(bytes, byteId + xFieldOffset);
+                point.y = BitConverter.ToSingle(bytes, byteId + xFieldOffset + 4);
+                point.z = BitConverter.ToSingle(bytes, byteId + xFieldOffset + 8);
+
+                if (colorFieldIndex >= 0)
+                {
+                    point.colorRGB = BitConverter.ToUInt32(bytes, byteId + (4 * colorFieldIndex));
+                }
+
+                if (isLabelAvailable)
+                {
+                    // TODO support types appart from byte
+                    point.label = bytes[byteId + labelOffset];
+                }
+
+                if ((pointIndex + 1) == pointCount)
+                {
+                    break;
+                }
+
+                byteId += rowSizeBytes;
+                pointIndex++;
             }
 
-            if (isLabelAvailable)
-            { 
-                // TODO support types appart from byte
-                point.label = bytes[i + labelOffset];
-            }
-            
-            if ((pointIndex + 1) == pointCount)
-            {
-                break;
-            }
-            
-            i += rowSizeBytes;
-            pointIndex++;
-        }
+        } while (remainingPoints > 0);
+
+        binaryReader.Close();
     }
 
     private int GetFieldOffset(string field, IList<string> fields, IEnumerable<int> sizes)
