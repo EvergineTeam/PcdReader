@@ -22,11 +22,15 @@ class PcdReader
 
     public void ReadPcdFile(string fileName)
     {
-        FileInfo fileInfo= new FileInfo(fileName);
+        FileInfo fileInfo = new FileInfo(fileName);
         FileSizeBytes = fileInfo.Length;
 
-        BinaryReader binaryReader = new BinaryReader(File.OpenRead(fileName));
-        byte[] bytes = binaryReader.ReadBytes(MaxHeaderSize);
+        byte[] bytes;
+        using (FileStream fileStream = File.OpenRead(fileName))
+        using (BinaryReader binaryReader = new BinaryReader(fileStream))
+        {
+            bytes = binaryReader.ReadBytes(MaxHeaderSize);
+        }
 
         ReadHeader(fileName, out var dataBytesIndex);
 
@@ -212,51 +216,50 @@ class PcdReader
 
         int pointsToRead = 100000;
 
-        BinaryReader binaryReader = new BinaryReader(File.OpenRead(fileName));
-        binaryReader.BaseStream.Seek(index, SeekOrigin.Begin);
-
-        ////byte[] = new byte[rowSizeBytes * pointsToRead];
-
-        int remainingPoints = this.pointCount;
-
-        do
+        using (FileStream fileStream = File.OpenRead(fileName))
+        using (BinaryReader binaryReader = new BinaryReader(fileStream))
         {
-            var loadPoints = Math.Min(pointsToRead, remainingPoints);
-            int loadBufferSize = rowSizeBytes * loadPoints;
-            remainingPoints -= loadPoints;
+            fileStream.Seek(index, SeekOrigin.Begin);
 
-            bytes = binaryReader.ReadBytes(loadBufferSize);
+            int remainingPoints = this.pointCount;
 
-            for (int byteId = 0; byteId < bytes.Length;)
+            do
             {
-                ref var point = ref points[pointIndex];
-                point.x = BitConverter.ToSingle(bytes, byteId + xFieldOffset);
-                point.y = BitConverter.ToSingle(bytes, byteId + xFieldOffset + 4);
-                point.z = BitConverter.ToSingle(bytes, byteId + xFieldOffset + 8);
+                var loadPoints = Math.Min(pointsToRead, remainingPoints);
+                int loadBufferSize = rowSizeBytes * loadPoints;
+                remainingPoints -= loadPoints;
 
-                if (colorFieldIndex >= 0)
+                bytes = binaryReader.ReadBytes(loadBufferSize);
+
+                for (int byteId = 0; byteId < bytes.Length;)
                 {
-                    point.colorRGB = BitConverter.ToUInt32(bytes, byteId + (4 * colorFieldIndex));
+                    ref var point = ref points[pointIndex];
+                    point.x = BitConverter.ToSingle(bytes, byteId + xFieldOffset);
+                    point.y = BitConverter.ToSingle(bytes, byteId + xFieldOffset + 4);
+                    point.z = BitConverter.ToSingle(bytes, byteId + xFieldOffset + 8);
+
+                    if (colorFieldIndex >= 0)
+                    {
+                        point.colorRGB = BitConverter.ToUInt32(bytes, byteId + (4 * colorFieldIndex));
+                    }
+
+                    if (isLabelAvailable)
+                    {
+                        // TODO support types appart from byte
+                        point.label = bytes[byteId + labelOffset];
+                    }
+
+                    if ((pointIndex + 1) == pointCount)
+                    {
+                        break;
+                    }
+
+                    byteId += rowSizeBytes;
+                    pointIndex++;
                 }
 
-                if (isLabelAvailable)
-                {
-                    // TODO support types appart from byte
-                    point.label = bytes[byteId + labelOffset];
-                }
-
-                if ((pointIndex + 1) == pointCount)
-                {
-                    break;
-                }
-
-                byteId += rowSizeBytes;
-                pointIndex++;
-            }
-
-        } while (remainingPoints > 0);
-
-        binaryReader.Close();
+            } while (remainingPoints > 0);
+        }
     }
 
     private int GetFieldOffset(string field, IList<string> fields, IEnumerable<int> sizes)
