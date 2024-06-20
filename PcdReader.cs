@@ -73,7 +73,7 @@ class PcdReader
 
         using (var textReader = new StreamReader(fileName))
         {
-            string? line;
+            string line;
             var headerLinesIndex = 0;
             dataBytesIndex = 0;
 
