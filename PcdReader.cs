@@ -212,6 +212,7 @@ class PcdReader
         var restOfFields = fields.Except(new string[] { "x", "y", "z", "rgb" });
         var isLabelAvailable = restOfFields.Contains("label");
         var labelOffset = GetFieldOffset("label", fields, sizes);
+        var labelsSize = sizes.ElementAt(fields.IndexOf("label"));
         var pointIndex = 0;
 
 
@@ -246,8 +247,14 @@ class PcdReader
 
                     if (isLabelAvailable)
                     {
-                        // TODO support types appart from byte
-                        point.label = bytes[byteId + labelOffset];
+                        if (labelsSize == 4)
+                        {
+                            point.label = BitConverter.ToUInt32(bytes, byteId + labelOffset);
+                        }
+                        else if (labelsSize == 1)
+                        {
+                            point.label = bytes[byteId + labelOffset];
+                        }
                     }
 
                     if ((pointIndex + 1) == pointCount)
@@ -341,7 +348,7 @@ struct Point3D
 
     public uint colorRGB;
 
-    public byte label;
+    public uint label;
 }
 
 /// <summary>
