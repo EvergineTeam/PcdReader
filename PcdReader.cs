@@ -212,7 +212,9 @@ class PcdReader
         var restOfFields = fields.Except(new string[] { "x", "y", "z", "rgb" });
         var isLabelAvailable = restOfFields.Contains("label");
         var labelOffset = GetFieldOffset("label", fields, sizes);
-        var labelsSize = sizes.ElementAt(fields.IndexOf("label"));
+        int labelsSize = 0;
+        if (isLabelAvailable)
+            labelsSize = sizes.ElementAt(fields.IndexOf("label"));
         var pointIndex = 0;
 
 
