@@ -249,14 +249,19 @@ class PcdReader
 
                     if (isLabelAvailable)
                     {
-                        if (labelsSize == 4)
-                        {
-                            point.label = BitConverter.ToUInt32(bytes, byteId + labelOffset);
-                        }
-                        else if (labelsSize == 1)
+                        if (labelsSize == 1)
                         {
                             point.label = bytes[byteId + labelOffset];
                         }
+                        else if (labelsSize == 2)
+                        {
+                            point.label = BitConverter.ToUInt16(bytes, byteId + labelOffset);
+                        }
+                        else if (labelsSize == 4)
+                        {
+                            point.label = (UInt16)BitConverter.ToUInt32(bytes, byteId + labelOffset);
+                        }
+
                     }
 
                     if ((pointIndex + 1) == pointCount)
@@ -350,7 +355,7 @@ struct Point3D
 
     public uint colorRGB;
 
-    public uint label;
+    public UInt16 label;
 }
 
 /// <summary>
