@@ -3,6 +3,8 @@
 // </auto-generated>
 
 // PCD file format: https://pcl.readthedocs.io/projects/tutorials/en/master/pcd_file_format.html#pcd-file-format
+using System.Runtime.CompilerServices;
+
 class PcdReader
 {
     private Header header;
@@ -133,6 +135,22 @@ class PcdReader
 
         return newLineBytesLength;
     }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ReadLabel(ref Point3D point, ref byte[] bytes, int byteId, int labelOffset, int labelsSize)
+    {
+        if (labelsSize == 1)
+        {
+            point.label = bytes[byteId + labelOffset];
+        }
+        else if (labelsSize == 2)
+        {
+            point.label = BitConverter.ToUInt16(bytes, byteId + labelOffset);
+        }
+        else if (labelsSize == 4)
+        {
+            throw new NotImplementedException("Sorry, label size of 4 bytes is not currently supported.");
+        }
+    }
 
     private void ReadBinaryCompressedData(byte[] bytes, int rowSizeBytes, int index)
     {
@@ -212,6 +230,9 @@ class PcdReader
         var restOfFields = fields.Except(new string[] { "x", "y", "z", "rgb" });
         var isLabelAvailable = restOfFields.Contains("label");
         var labelOffset = GetFieldOffset("label", fields, sizes);
+        int labelsSize = 0;
+        if (isLabelAvailable)
+            labelsSize = sizes.ElementAt(fields.IndexOf("label"));
         var pointIndex = 0;
 
 
@@ -246,8 +267,7 @@ class PcdReader
 
                     if (isLabelAvailable)
                     {
-                        // TODO support types appart from byte
-                        point.label = bytes[byteId + labelOffset];
+                        ReadLabel(ref point, ref bytes, byteId, labelOffset, labelsSize);
                     }
 
                     if ((pointIndex + 1) == pointCount)
@@ -341,7 +361,7 @@ struct Point3D
 
     public uint colorRGB;
 
-    public byte label;
+    public UInt16 label;
 }
 
 /// <summary>
