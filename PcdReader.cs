@@ -148,7 +148,8 @@ class PcdReader
         }
         else if (labelsSize == 4)
         {
-            throw new NotImplementedException("Sorry, label size of 4 bytes is not currently supported.");
+            //throw new NotImplementedException("Sorry, label size of 4 bytes is not currently supported.");
+            point.label = (ushort)BitConverter.ToUInt32(bytes, byteId + labelOffset);
         }
     }
 
@@ -235,6 +236,10 @@ class PcdReader
             labelsSize = sizes.ElementAt(fields.IndexOf("label"));
         var pointIndex = 0;
 
+        if(labelsSize > 2)
+        {
+            Console.WriteLine("We're currently using 2-bytes labels. Expect errors if you're using more than 65536 labels");
+        }
 
         int pointsToRead = 100000;
 
