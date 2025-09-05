@@ -59,8 +59,9 @@ class PcdReader
                 ReadBinaryData(fileName, bytes, rowSizeBytes, (int)dataBytesIndex, sizes);
                 break;
             case "binary_compressed":
-                ReadBinaryCompressedData(bytes, rowSizeBytes, (int)dataBytesIndex);
-                break;
+                throw new NotImplementedException("Sorry, Binary compressed format data type is not currently supported.");
+                // ReadBinaryCompressedData(bytes, rowSizeBytes, (int)dataBytesIndex);
+                // break;
             case "ascii":
                 throw new NotImplementedException("Sorry, ASCII data type is not currently supported.");
             default:
